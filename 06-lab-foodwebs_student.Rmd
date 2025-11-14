@@ -1,3 +1,8 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
 ##  Lab: Food Webs & Network Measures (Student Version)
 
 ```{r lab_setup, include=FALSE}
@@ -54,7 +59,11 @@ names(carnivores) <- row_labs_sp
 - 1a. Use the above vector of species names to label the row names of the species occurrence and the body size matrices.  The columns of the species occurrence matrix are time points, so we can leave those as V1 etc., but we should set the column names of the mass matrix as "f", "m" (female and male). Use `head` to check each matrix to see if the names are displayed properly. 
 
 ```{r}
-###  your code here
+rownames(sp_occ) <- row_labs_sp
+rownames(sp_mass) <- row_labs_sp
+colnames(sp_mass) <- c("f", "m")
+head(sp_occ)
+head(sp_mass)
 ```
 Yeakel recommended an updated equation to estimate the probability a predator consumed a prey based on their relative body masses from [Rohr et al. 2010.](https://doi.org/10.1086/653667). The  probability of existence of a trophic link between a predator of body-size $m_i$ and a prey of body-size $m_j$ is given by:
 
@@ -75,7 +84,15 @@ inv_logit
 ```
 
 ```{r}
-# your code here
+probEat <- function(m_i, m_j) {
+  inner <- alpha + (beta * log(m_j / m_i)) + (gamma * (log(m_j / m_i))^2)
+  prob <- inv_logit(inner)
+  prob <- round(prob, 2)
+  return(prob)
+}
+
+probEat(10, 1)
+probEat(1, 10)
 ```
 
 - 1c. Now create networks of who eats whom. We will start with adjacency matrices. We will assume all of our species are the size of females. For this step, don`t worry about predators vs. prey yet, just calculate all of the feeding probabilities based on body sizes.  
@@ -83,15 +100,30 @@ inv_logit
 Hint: if you start with a square matrix of all zeros (one row and one column for each species), you can use a for loop to fill in that matrix with probabilities calculated from your function above.
 
 ```{r}
-# your code here
+mass_rows <- nrow(sp_mass)
+adjacency <- matrix(0, nrow = mass_rows, ncol = mass_rows)
 
+rownames(adjacency) <- row_labs_sp
+colnames(adjacency) <- row_labs_sp
+
+for(i in 1:mass_rows) {
+  for(j in 1:mass_rows) {
+    adjacency[i, j] <- probEat(sp_mass[i, "f"], sp_mass[j, "f"])
+  }
+}
+adjacency
+sp_mass
+carnivores
 ```
 
 - 1d. Now that you have your matrix of potential feeding interactions based on body size, use the `carnivores` vector created above to set all of the feeding interactions of herbivores (0s in that vector) to zero. In foodwebs the columns are the higher trophic level and the rows are the lower.
 HINT: the function `sweep` may be useful, though there are many approaches to do the needed matrix multiplication. Print the row and column sums. 
 
 ```{r}
-# your code here
+adjacency_w_herbivores <- sweep(adjacency, 2, carnivores, FUN = "*")
+adjacency_w_herbivores
+colSums(adjacency_w_herbivores)
+rowSums(adjacency_w_herbivores)
 ```
 
 ### Lab question 2: Breaking the networks into time periods
@@ -103,7 +135,13 @@ Use the function `empty` from the bipartite package to empty the matrix of rows 
 HINT: You will need to zero out the rows where a species in not present in that time period and the columns. The function `sweep` may be useful again.
 
 ```{r}
-###  your code here
+present_t2 <- sp_occ[, 2]
+sum(present_t2)
+
+web_t2 <- sweep(adjacency_w_herbivores, 1, present_t2, "*") # zero out rows (prey not present)
+web_t2 <- sweep(web_t2, 2, present_t2, "*") # zero out columns (predators not present)
+web_t2 <- empty(web_t2) #remove all zero rows and zero columns
+nrow(web_t2) #number of species present in the web
 ```
 
 - 2b. Now create a network for all of the time points by creating a list where each element is a network. You will need to use a for loop, or an `lapply` if you feel like experimenting with apply functions. Print the first 5 columns and rows of the 5th time period. 
@@ -111,23 +149,47 @@ HINT: You will need to zero out the rows where a species in not present in that 
 HINT: If choosing the for loop route, remember to create an empty list of a specific length use the function `vector`. To access a specific element of a list, use [[]], for example cool_list[[1]] accesses the first element of the list.
 
 ```{r}
-###  your code here
+n_time <- ncol(sp_occ)
+web_list <- vector("list", n_time)
+
+for(t in 1:n_time){
+  present <- sp_occ[, t]   # species present in time period t
+  tmp <- sweep(adjacency_w_herbivores, 1, present, "*") # zero out rows (prey)
+  tmp <- sweep(tmp, 2, present, "*") # zero out columns (predators)
+  tmp <- empty(tmp) # remove rows and columns with no interactions
+  web_list[[t]] <- tmp # store into list
+}
+
+web_list[[5]][1:5, 1:5]
+
+nrow(web_list[[2]])
 ```
 
 ###  Lab question 3: Visualize the networks
 - 3a. Convert the adjacency matrices to igraph class objects using the function `graph_from_adjacency_matrix`. You can use a for loop or an lapply. Because these are food webs, set the argument mode to "directed" and the argument diag to FALSE (this means a species cannot consumer members of its own species, i.e., no canabalism/self-loops). Also remember that these interactions are weighted.  
 
 ```{r}
-###  your code here
+library(igraph)
+
+graph_list <- vector("list", length(web_list))
+
+for(t in seq_along(web_list)) {
+  graph_list[[t]] <- graph_from_adjacency_matrix(
+    web_list[[t]], # time period of adjacency matrix
+    mode = "directed", diag = FALSE, weighted = TRUE
+  )
+}
+
+graph_list[[1]]
 ```
 
 - 3b. Plot three networks of your choice, using different colors for the predators and prey.
 
 ```{r}
 ###  assign groups as carnivore or herbivore
-
+groups <- ifelse(carnivorse == 1, "carnivore", "herbivore")
 ###  convert to a network 3d object
-
+# I don't know how to do this...
 ###  plot the network
 
 ```
